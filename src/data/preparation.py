@@ -49,8 +49,8 @@ TO_REMOVE = [  # Duplicates - Different ID, same class
     'whtkin2/XC540087.ogg', 'woosan/XC476064.ogg', 'woosan/XC578599.ogg', 'woosan/XC740798.ogg',
     'zitcis1/XC302781.ogg',
 ]
-
-RENAME_DUPS = {  # Different id, different class
+·
+RENAME_DUPS = {  # Different id, different class 
     'XC207123': 'XC207062',
     'XC268375': 'XC241382',
     'XC823514': 'XC823527',
@@ -63,7 +63,8 @@ RENAME_DUPS = {  # Different id, different class
 }
 
 
-def prepare_folds(data_path="../input/", k=4):
+def prepare_folds(data_path = "../input/", k = 4):
+
     """
     Prepare data folds for cross-validation.
     StratifiedGroupKFold is used.
@@ -75,7 +76,7 @@ def prepare_folds(data_path="../input/", k=4):
     Returns:
         pandas DataFrame: DataFrame containing the files and their respective fold assignments.
     """
-    df = prepare_data(data_path)
+    df = prepare_data(data_path) # 
 
     sgkf = StratifiedGroupKFold(n_splits=k, shuffle=True, random_state=42)
     splits = sgkf.split(df, y=df["primary_label"], groups=df["id"])
@@ -99,23 +100,27 @@ def update_secondary_labels(df):
     Returns:
         pandas DataFrame: Updated data.
     """
+
     df_dups = df[df.duplicated(subset="id", keep=False)].groupby("id").agg(list)
 
     if not len(df_dups):
         return df
 
     df_dups["labels"] = df_dups.apply(
-        lambda x: x.primary_label + list(chain.from_iterable(x.secondary_labels)),
-        axis=1,
+        lambda x: x.primary_label + list(chain.from_iterable(x.secondary_labels)), # itertools.chain.from_iterable flattens a list of lists into a single list.
+        axis=1, # all the labels for the dup cases?
     )
     mapping = df_dups.to_dict()["labels"]
+
     df["secondary_labels"] = df.apply(
-        lambda x: mapping.get(x.id, x.secondary_labels), axis=1
+        lambda x: mapping.get(x.id, x.secondary_labels), axis=1  #  
     )
+
     df["secondary_labels"] = df.apply(
-        lambda x: list(set([s for s in x.secondary_labels if s != x.primary_label])),
+        lambda x: list(set([s for s in x.secondary_labels if s != x.primary_label])),  # dedup
         axis=1,
     )
+    
     return df
 
 
@@ -133,10 +138,10 @@ def prepare_data(data_path="../input/"):
     df["id"] = df["filename"].apply(lambda x: x.split("/")[-1][:-4])
     df = df[["id", "filename", "primary_label", "secondary_labels", "rating"]]
     df["path"] = data_path + "train_audio/" + df["filename"]
-    df["path_ft"] = data_path + "train_features/" + df["filename"].apply(lambda x: x[:-3]) + "hdf5"
+    df["path_ft"] = data_path + "train_features/" + df["filename"].apply(lambda x: x[:-3]) + "hdf5"  # what does path_ft mean?
     df["secondary_labels"] = df["secondary_labels"].apply(eval)
 
-    df = update_secondary_labels(df)
+    df = update_secondary_labels(df) #  
 
     folds = pd.read_csv(data_path + "folds_4.csv")
     df = df.merge(folds)
@@ -155,16 +160,28 @@ def update_labels(df):
     Returns:
         pandas.DataFrame: DataFrame with updated 'primary_label' and 'secondary_labels'.
     """
-    df_dups = df[df.duplicated(subset="id", keep=False)].groupby("id").agg(list)
-
+    # duplicated case
+    df_dups = df[df.duplicated(subset="id", keep=False)].groupby("id").agg(list) 
+    # id  primary label  secondary label 
+    # 1   [ ]            [[],[]]
+    # 2   [ ]            [  ]
     if not len(df_dups):
         return df
 
     df_dups["secondary_labels"] = df_dups["secondary_labels"].apply(
         lambda x: list(chain.from_iterable(x))
     )
-    mapping_1 = df_dups.to_dict()["primary_label"]
-    mapping_2 = df_dups.to_dict()["secondary_labels"]
+
+
+    mapping_1 = df_dups.to_dict()["primary_label"] 
+    # 'dict'	{column -> {index -> value}} (default)
+    # 'list'	{column -> [values]}
+    # 'series'	{column -> Series(values)}
+    # 'records'	[{column -> value}, … , {column -> value}] (list of row-wise dictionaries)
+    # 'index'	{index -> {column -> value}}
+    # 'split'	{'index': [...], 'columns': [...], 'data': [...]}
+    mapping_2 = df_dups.to_dict()["secondary_labels"] # id - label ?
+
     df["primary_label"] = df.apply(
         lambda x: mapping_1.get(x.id, x.primary_label), axis=1
     )
@@ -195,7 +212,9 @@ def prepare_data_2(data_path="../input/"):
     df["path_ft"] = (
         data_path + "train_features/" + df["filename"].apply(lambda x: x[:-3]) + "hdf5"
     )
-    df["secondary_labels"] = df["secondary_labels"].apply(eval)
+    df["secondary_labels"] = df["secondary_labels"].apply(eval) 
+    # '["label1", "label2"]' --> ['label1', 'label2'] eval() evaluates a string as a Python expression. So:
+    # If df["secondary_labels"] contains strings that represent Python data structures (like lists or dictionaries), eval() will convert those strings into actual Python objects.
 
     # Handle duplicates
     df = df[~df["filename"].isin(TO_REMOVE)].reset_index(drop=True)
@@ -203,8 +222,7 @@ def prepare_data_2(data_path="../input/"):
 
     df = update_labels(df)
     df = df.drop_duplicates(subset="id", keep="first").reset_index(drop=True)
-
-    folds = pd.read_csv(data_path + "folds_4.csv")
+    folds = pd.read_csv(data_path + "folds_4.csv") # what does this mean
     df = df.merge(folds)
 
     return df
@@ -325,8 +343,9 @@ def upsample_low_freq(df, low_freq=20, verbose=0):
     Returns:
         pandas.DataFrame: DataFrame containing the upsampled dataset.
     """
-    df_ = df[~df["primary_label"].apply(lambda x: isinstance(x, list))]
-    cts = df_.groupby('primary_label').count()["id"]
+
+    df_ = df[~df["primary_label"].apply(lambda x: isinstance(x, list))] #?
+    cts = df_.groupby('primary_label').count()["id"] 
     cts = cts[cts < low_freq]
 
     extra_samples = []
